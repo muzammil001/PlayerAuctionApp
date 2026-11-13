@@ -1,0 +1,263 @@
+@page "/teams"
+@rendermode InteractiveServer
+@inject AuctionTeamService TeamService
+
+<PageTitle>Teams</PageTitle>
+
+<div class="mx-auto max-w-7xl space-y-8">
+    <section class="overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-xl sm:px-10 sm:py-10">
+        <div class="flex flex-col justify-between gap-8 md:flex-row md:items-end">
+            <div>
+                <p class="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">Auction setup</p>
+                <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Teams and owners</h1>
+                <p class="mt-3 max-w-xl text-slate-300">Register each team and its owner, and keep track of its auction budget and squad.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 sm:min-w-72">
+                <div class="rounded-2xl bg-white/10 p-4">
+                    <p class="text-sm text-slate-300">Teams registered</p>
+                    <p class="mt-1 text-3xl font-bold">@teams.Count</p>
+                </div>
+                <div class="rounded-2xl bg-white/10 p-4">
+                    <p class="text-sm text-slate-300">Squad limit</p>
+                    <p class="mt-1 text-3xl font-bold">96</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
+        <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <div class="mb-6 flex items-center gap-3">
+                <span class="flex size-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><i class="fa-solid fa-people-group" aria-hidden="true"></i></span>
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Teams and owners</h2>
+                    <p class="text-sm text-slate-500">Each team starts with 100,000 points and 3 cash purchases.</p>
+                </div>
+            </div>
+
+            @if (teams.Count == 0)
+            {
+                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                    <i class="fa-solid fa-flag-checkered mb-3 text-2xl text-slate-400" aria-hidden="true"></i>
+                    <p class="font-semibold text-slate-800">No teams registered yet</p>
+                    <p class="mt-1 text-sm text-slate-500">Add the first team using the form.</p>
+                </div>
+            }
+            else
+            {
+                var team = teams[currentTeamIndex];
+                <article @key="team.Id" class="team-card @slideAnimation rounded-2xl border border-slate-200 p-5">
+                            <div class="flex items-start justify-between gap-4">
+                                <div>
+                                    <div class="flex items-center gap-3">
+                                        @if (!string.IsNullOrWhiteSpace(team.LogoImage))
+                                        {
+                                            <img src="@team.LogoImage" alt="@team.Name logo" class="size-12 rounded-xl border border-slate-200 object-cover" />
+                                        }
+                                        else
+                                        {
+                                            <span class="flex size-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                                        }
+                                        <div>
+                                            <h3 class="font-bold text-slate-900">@team.Name</h3>
+                                            <p class="mt-1 text-sm text-slate-500">@(string.IsNullOrWhiteSpace(team.City) ? "City not added" : team.City)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Ready</span>
+                            </div>
+                            <div class="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                                <div>
+                                    <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Owner</p>
+                                    <p class="mt-1 text-sm font-semibold text-slate-800">@team.OwnerName</p>
+                                    <p class="text-sm text-slate-500">@team.OwnerPhone</p>
+                                    @if (!string.IsNullOrWhiteSpace(team.OwnerEmail))
+                                    {
+                                        <p class="text-sm text-slate-500">@team.OwnerEmail</p>
+                                    }
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Points</p>
+                                        <p class="mt-1 text-sm font-semibold text-slate-800">@team.RemainingPoints.ToString("N0")</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Cash buys</p>
+                                        <p class="mt-1 text-sm font-semibold text-slate-800">@team.CashPurchasesRemaining / 3 left</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center gap-2 text-sm text-slate-500">
+                                <i class="fa-solid fa-users text-emerald-600" aria-hidden="true"></i>
+                                Squad: @team.SquadCount / 16 players
+                            </div>
+                </article>
+                <div class="mt-4 flex items-center justify-between gap-3">
+                    <button type="button" @onclick="PreviousTeam" disabled="@(currentTeamIndex == 0)" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+                        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Previous
+                    </button>
+                    <span class="text-sm font-medium text-slate-500">@(currentTeamIndex + 1) of @teams.Count</span>
+                    <button type="button" @onclick="NextTeam" disabled="@(currentTeamIndex >= teams.Count - 1)" class="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40">
+                        Next <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                    </button>
+                </div>
+            }
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <div class="mb-6">
+                <p class="text-sm font-semibold uppercase tracking-wider text-emerald-700">Step 1</p>
+                <h2 class="mt-1 text-xl font-bold text-slate-900">Register a team</h2>
+                <p class="mt-1 text-sm text-slate-500">Add the team and its owner details to get started.</p>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(message))
+            {
+                <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">@message</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(error))
+            {
+                <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">@error</div>
+            }
+
+            <EditForm Model="input" OnValidSubmit="AddTeam">
+                <DataAnnotationsValidator />
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="mb-1.5 block text-sm font-medium text-slate-700">Team name <span class="text-red-600">*</span></span>
+                        <InputText @bind-Value="input.Name" class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100" placeholder="e.g. Lahore Lions" />
+                        <ValidationMessage For="() => input.Name" class="mt-1 block text-sm text-red-600" />
+                    </label>
+                    <label class="block">
+                        <span class="mb-1.5 block text-sm font-medium text-slate-700">City <span class="text-red-600">*</span></span>
+                        <InputSelect @bind-Value="input.City" class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100">
+                            <option value="">Select a city</option>
+                            @foreach (var city in cities)
+                            {
+                                <option value="@city">@city</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => input.City" class="mt-1 block text-sm text-red-600" />
+                    </label>
+                    <div>
+                        <span class="mb-1.5 block text-sm font-medium text-slate-700">Team logo <span class="text-red-600">*</span></span>
+                        <div class="flex items-center gap-4 rounded-xl border border-dashed border-slate-300 p-4">
+                            @if (!string.IsNullOrWhiteSpace(input.LogoDataUrl))
+                            {
+                                <img src="@input.LogoDataUrl" alt="Selected team logo preview" class="size-16 rounded-xl border border-slate-200 object-cover" />
+                            }
+                            else
+                            {
+                                <span class="flex size-16 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-2xl text-slate-400"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                            }
+                            <div class="min-w-0">
+                                <InputFile OnChange="LogoChanged" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:font-semibold file:text-emerald-800 hover:file:bg-emerald-100" />
+                                <p class="mt-2 text-xs text-slate-500">PNG, JPG, WEBP or GIF · up to 2 MB</p>
+                                @if (!string.IsNullOrWhiteSpace(logoError))
+                                {
+                                    <p class="mt-1 text-sm text-red-600" role="alert">@logoError</p>
+                                }
+                            </div>
+                        </div>
+                        <ValidationMessage For="() => input.LogoDataUrl" class="mt-1 block text-sm text-red-600" />
+                    </div>
+                    <div class="border-t border-slate-100 pt-4">
+                        <p class="mb-4 text-sm font-semibold text-slate-800">Owner details</p>
+                        <div class="space-y-4">
+                            <label class="block">
+                                <span class="mb-1.5 block text-sm font-medium text-slate-700">Owner name <span class="text-red-600">*</span></span>
+                                <InputText @bind-Value="input.OwnerName" class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100" placeholder="Full name" />
+                                <ValidationMessage For="() => input.OwnerName" class="mt-1 block text-sm text-red-600" />
+                            </label>
+                            <label class="block">
+                                <span class="mb-1.5 block text-sm font-medium text-slate-700">Phone number <span class="text-red-600">*</span></span>
+                                <InputText @bind-Value="input.OwnerPhone" type="tel" class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100" placeholder="03xx xxxxxxx" />
+                                <ValidationMessage For="() => input.OwnerPhone" class="mt-1 block text-sm text-red-600" />
+                            </label>
+                            <label class="block">
+                                <span class="mb-1.5 block text-sm font-medium text-slate-700">Email <span class="text-slate-400">(optional)</span></span>
+                                <InputText @bind-Value="input.OwnerEmail" type="email" class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100" placeholder="owner@example.com" />
+                                <ValidationMessage For="() => input.OwnerEmail" class="mt-1 block text-sm text-red-600" />
+                            </label>
+                        </div>
+                    </div>
+                    <button type="submit" class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-2 focus:outline-offset-2 focus:outline-emerald-700">
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add team
+                    </button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+</div>
+
+@code {
+    private NewTeamInput input = new();
+    private IReadOnlyList<TeamSummary> teams = [];
+    private string? message;
+    private string? error;
+    private string? logoError;
+    private int currentTeamIndex;
+    private string slideAnimation = string.Empty;
+    private readonly string[] cities = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Peshawar", "Quetta", "Multan", "Faisalabad", "Sialkot", "Gujranwala", "Hyderabad", "Bahawalpur", "Sargodha", "Abbottabad"];
+
+    protected override async Task OnInitializedAsync() => teams = await TeamService.GetTeamsAsync();
+
+    private void PreviousTeam()
+    {
+        if (currentTeamIndex > 0)
+        {
+            slideAnimation = "team-card-previous";
+            currentTeamIndex--;
+        }
+    }
+
+    private void NextTeam()
+    {
+        if (currentTeamIndex < teams.Count - 1)
+        {
+            slideAnimation = "team-card-next";
+            currentTeamIndex++;
+        }
+    }
+
+    private async Task LogoChanged(InputFileChangeEventArgs eventArgs)
+    {
+        logoError = null;
+        var file = eventArgs.File;
+        var allowedTypes = new[] { "image/png", "image/jpeg", "image/webp", "image/gif" };
+
+        if (!allowedTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+        {
+            logoError = "Choose a PNG, JPG, WEBP or GIF image.";
+            input.LogoDataUrl = null;
+            return;
+        }
+
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            logoError = "Logo must be 2 MB or smaller.";
+            input.LogoDataUrl = null;
+            return;
+        }
+
+        await using var stream = file.OpenReadStream(2 * 1024 * 1024);
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer);
+        input.LogoDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(buffer.ToArray())}";
+    }
+
+    private async Task AddTeam()
+    {
+        error = await TeamService.CreateTeamAsync(input);
+        var addedTeamName = input.Name.Trim();
+        message = error is null ? $"{addedTeamName} has been registered." : null;
+
+        if (error is null)
+        {
+            input = new NewTeamInput();
+            teams = await TeamService.GetTeamsAsync();
+            currentTeamIndex = Math.Max(0, Array.FindIndex(teams.ToArray(), team => team.Name == addedTeamName));
+            logoError = null;
+        }
+    }
+}

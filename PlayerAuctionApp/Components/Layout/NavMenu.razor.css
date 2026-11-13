@@ -1,0 +1,14 @@
+.nav-toggle { appearance: none; cursor: pointer; width: 3.5rem; height: 2.5rem; color: white; position: absolute; top: .5rem; right: 1rem; border: 1px solid rgb(16 185 129 / 30%); border-radius: .65rem; background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='%2310b981' stroke-linecap='round' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem rgb(16 185 129 / 10%); }
+.nav-toggle:checked { background-color: rgb(16 185 129 / 25%); }
+.nav-header { min-height: 4rem; display: flex; align-items: center; padding: 0 1.25rem; background: #020617; border-bottom: 1px solid rgb(255 255 255 / 8%); }
+.nav-brand { color: white; font-size: 1.1rem; text-decoration: none; }
+.nav-icon { width: 1.25rem; margin-right: .75rem; text-align: center; }
+.nav-item { font-size: .9rem; padding: 0 .75rem .5rem; }
+.nav-item:first-child { padding-top: 1.25rem; }
+.nav-item:last-child { padding-bottom: 1rem; }
+.nav-item ::deep .nav-link { color: #cbd5e1; background: transparent; border: 0; border-radius: .75rem; min-height: 3rem; display: flex; align-items: center; text-decoration: none; width: 100%; padding: 0 .9rem; transition: background-color .15s ease, color .15s ease; }
+.nav-item ::deep a.active { background: #047857; color: white; box-shadow: 0 6px 16px rgb(4 120 87 / 25%); }
+.nav-item ::deep .nav-link:hover { background: rgb(16 185 129 / 14%); color: #a7f3d0; }
+.nav-scrollable { display: none; }
+.nav-toggle:checked ~ .nav-scrollable { display: block; }
+@media (min-width: 641px) { .nav-toggle { display: none; } .nav-scrollable { display: block; height: calc(100vh - 4rem); overflow-y: auto; } }
