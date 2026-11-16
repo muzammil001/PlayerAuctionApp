@@ -8,6 +8,8 @@ public sealed class Auction
     public int MaximumSquadSize { get; set; } = 16;
     public int StartingBudgetPoints { get; set; } = 100_000;
     public int CashPurchaseLimit { get; set; } = 3;
+    public DateTime? StartedAtUtc { get; set; }
     public ICollection<Team> Teams { get; set; } = new List<Team>();
     public ICollection<Player> Players { get; set; } = new List<Player>();
+    public ICollection<AuctionBid> Bids { get; set; } = new List<AuctionBid>();
 }

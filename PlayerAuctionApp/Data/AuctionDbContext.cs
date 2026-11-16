@@ -10,6 +10,7 @@ public sealed class AuctionDbContext(DbContextOptions<AuctionDbContext> options)
     public DbSet<TeamOwner> TeamOwners => Set<TeamOwner>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<AuctionPurchase> AuctionPurchases => Set<AuctionPurchase>();
+    public DbSet<AuctionBid> AuctionBids => Set<AuctionBid>();
 
     public static readonly Guid DefaultAuctionId = Guid.Parse("b5dd884c-7729-45aa-bce7-0c91535aa6c9");
 
@@ -73,6 +74,20 @@ public sealed class AuctionDbContext(DbContextOptions<AuctionDbContext> options)
                 .HasForeignKey(purchase => purchase.TeamId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(purchase => purchase.Player).WithOne(player => player.Purchase)
                 .HasForeignKey<AuctionPurchase>(purchase => purchase.PlayerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionBid>(entity =>
+        {
+            entity.HasKey(bid => bid.Id);
+            entity.Property(bid => bid.PaymentMethod).HasConversion<string>().HasMaxLength(12);
+            entity.HasIndex(bid => new { bid.PlayerId, bid.Amount });
+            entity.HasIndex(bid => bid.TeamId);
+            entity.HasOne(bid => bid.Auction).WithMany(auction => auction.Bids)
+                .HasForeignKey(bid => bid.AuctionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(bid => bid.Player).WithMany(player => player.Bids)
+                .HasForeignKey(bid => bid.PlayerId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(bid => bid.Team).WithMany(team => team.Bids)
+                .HasForeignKey(bid => bid.TeamId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

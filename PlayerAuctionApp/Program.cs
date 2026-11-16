@@ -12,6 +12,9 @@ builder.Services.AddDbContextFactory<AuctionDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("AuctionDatabase")));
 builder.Services.AddScoped<AuctionTeamService>();
 builder.Services.AddScoped<AuctionPlayerService>();
+builder.Services.AddScoped<AuctionSaleService>();
+builder.Services.AddScoped<AuctionBidService>();
+builder.Services.AddScoped<AuctionClockService>();
 
 var app = builder.Build();
 
@@ -37,6 +40,7 @@ app.UseHttpsRedirection();
 
 app.UseAntiforgery();
 
+app.UseStaticFiles();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

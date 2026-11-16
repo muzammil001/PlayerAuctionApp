@@ -93,6 +93,31 @@ public sealed class AuctionPlayerService(IDbContextFactory<AuctionDbContext> con
         return null;
     }
 
+    public async Task<string?> UpdatePlayerAsync(Guid id, NewPlayerInput input, CancellationToken cancellationToken = default)
+    {
+        if (input.Role is null || input.BattingHand is null || input.DateOfBirth is null || string.IsNullOrWhiteSpace(input.City))
+            return "Complete the required player details.";
+        if (input.DateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow)) return "Date of birth cannot be in the future.";
+        if (input.PhotoDataUrl?.Length > 2_800_000) return "The player photo is too large. Choose an image up to 2 MB.";
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var player = await db.Players.SingleOrDefaultAsync(p => p.Id == id && p.AuctionId == AuctionDbContext.DefaultAuctionId, cancellationToken);
+        if (player is null) return "Player not found.";
+        player.FullName = input.FullName.Trim(); player.DateOfBirth = input.DateOfBirth.Value; player.City = input.City.Trim();
+        player.Role = input.Role.Value; player.BattingHand = input.BattingHand.Value;
+        player.BowlingStyle = string.IsNullOrWhiteSpace(input.BowlingStyle) ? null : input.BowlingStyle.Trim();
+        player.BasePricePoints = input.BasePricePoints; player.PhotoDataUrl = input.PhotoDataUrl;
+        await db.SaveChangesAsync(cancellationToken); return null;
+    }
+
+    public async Task<string?> DeletePlayerAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var player = await db.Players.Include(p => p.Purchase).SingleOrDefaultAsync(p => p.Id == id && p.AuctionId == AuctionDbContext.DefaultAuctionId, cancellationToken);
+        if (player is null) return "Player not found.";
+        if (player.Purchase is not null) return "This player has been purchased and cannot be deleted.";
+        db.Players.Remove(player); await db.SaveChangesAsync(cancellationToken); return null;
+    }
+
     private static int CalculateAge(DateOnly dateOfBirth, DateOnly today)
     {
         var age = today.Year - dateOfBirth.Year;

@@ -14,6 +14,7 @@ public sealed class Player
     public string? PhotoDataUrl { get; set; }
     public int BasePricePoints { get; set; }
     public AuctionPurchase? Purchase { get; set; }
+    public ICollection<AuctionBid> Bids { get; set; } = new List<AuctionBid>();
 }
 
 public enum PlayerRole

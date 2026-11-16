@@ -37,6 +37,9 @@ namespace PlayerAuctionApp.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("StartingBudgetPoints")
                         .HasColumnType("INTEGER");
 
@@ -54,6 +57,43 @@ namespace PlayerAuctionApp.Migrations
                             Name = "Cricket Player Auction",
                             StartingBudgetPoints = 100000
                         });
+                });
+
+            modelBuilder.Entity("PlayerAuctionApp.Domain.AuctionBid", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("AuctionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("PlacedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuctionId");
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("PlayerId", "Amount");
+
+                    b.ToTable("AuctionBids");
                 });
 
             modelBuilder.Entity("PlayerAuctionApp.Domain.AuctionPurchase", b =>
@@ -199,6 +239,33 @@ namespace PlayerAuctionApp.Migrations
                     b.ToTable("TeamOwners");
                 });
 
+            modelBuilder.Entity("PlayerAuctionApp.Domain.AuctionBid", b =>
+                {
+                    b.HasOne("PlayerAuctionApp.Domain.Auction", "Auction")
+                        .WithMany("Bids")
+                        .HasForeignKey("AuctionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PlayerAuctionApp.Domain.Player", "Player")
+                        .WithMany("Bids")
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PlayerAuctionApp.Domain.Team", "Team")
+                        .WithMany("Bids")
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Auction");
+
+                    b.Navigation("Player");
+
+                    b.Navigation("Team");
+                });
+
             modelBuilder.Entity("PlayerAuctionApp.Domain.AuctionPurchase", b =>
                 {
                     b.HasOne("PlayerAuctionApp.Domain.Player", "Player")
@@ -253,6 +320,8 @@ namespace PlayerAuctionApp.Migrations
 
             modelBuilder.Entity("PlayerAuctionApp.Domain.Auction", b =>
                 {
+                    b.Navigation("Bids");
+
                     b.Navigation("Players");
 
                     b.Navigation("Teams");
@@ -260,11 +329,15 @@ namespace PlayerAuctionApp.Migrations
 
             modelBuilder.Entity("PlayerAuctionApp.Domain.Player", b =>
                 {
+                    b.Navigation("Bids");
+
                     b.Navigation("Purchase");
                 });
 
             modelBuilder.Entity("PlayerAuctionApp.Domain.Team", b =>
                 {
+                    b.Navigation("Bids");
+
                     b.Navigation("Owner")
                         .IsRequired();
 

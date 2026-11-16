@@ -1,0 +1,21 @@
+<div class="cash-purchase-status @(Compact ? "cash-purchase-status-compact" : null)" role="img" aria-label="@($"{SafeRemaining} of 3 cash purchases remaining")">
+    <div class="cash-signal" aria-hidden="true">
+        @for (var slot = 0; slot < 3; slot++)
+        {
+            var isUsed = slot < UsedCount;
+            <span class="cash-signal-light @(isUsed ? "cash-signal-red is-on" : "cash-signal-green is-on")"></span>
+        }
+    </div>
+    <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Cash buys left</p>
+        <p class="mt-1 @(Compact ? "text-sm" : "text-2xl") font-black text-white">@SafeRemaining <span class="text-sm font-semibold text-slate-400">/ 3</span></p>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Remaining { get; set; }
+    [Parameter] public bool Compact { get; set; }
+
+    private int SafeRemaining => Math.Clamp(Remaining, 0, 3);
+    private int UsedCount => 3 - SafeRemaining;
+}

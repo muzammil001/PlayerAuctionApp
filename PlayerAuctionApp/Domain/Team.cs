@@ -10,4 +10,5 @@ public sealed class Team
     public string? LogoImage { get; set; }
     public TeamOwner Owner { get; set; } = null!;
     public ICollection<AuctionPurchase> Purchases { get; set; } = new List<AuctionPurchase>();
+    public ICollection<AuctionBid> Bids { get; set; } = new List<AuctionBid>();
 }

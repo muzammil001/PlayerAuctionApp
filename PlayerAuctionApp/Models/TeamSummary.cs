@@ -10,4 +10,15 @@ public sealed record TeamSummary(
     string? OwnerEmail,
     int RemainingPoints,
     int CashPurchasesRemaining,
-    int SquadCount);
+    int SquadCount,
+    IReadOnlyList<TeamPlayerSummary> Squad);
+
+public sealed record TeamPlayerSummary(
+    Guid Id,
+    string FullName,
+    string City,
+    string Role,
+    string? Photo,
+    int PurchasePrice,
+    string PaymentMethod,
+    DateTime PurchasedAtUtc);

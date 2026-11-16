@@ -1,6 +1,7 @@
 @page "/teams"
 @rendermode InteractiveServer
 @inject AuctionTeamService TeamService
+@inject IJSRuntime JS
 
 <PageTitle>Teams</PageTitle>
 
@@ -91,6 +92,12 @@
                                 <i class="fa-solid fa-users text-emerald-600" aria-hidden="true"></i>
                                 Squad: @team.SquadCount / 16 players
                             </div>
+                            <div class="mt-5 flex gap-2"><button type="button" @onclick="() => EditTeam(team)" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700">Edit team</button><button type="button" @onclick="() => DeleteTeam(team)" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700">Delete team</button></div>
+                            <div class="mt-5 border-t border-slate-100 pt-4">
+                                <div class="mb-3 flex items-center justify-between"><h4 class="font-semibold text-slate-900">Squad</h4><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">@team.SquadCount / 16</span></div>
+                                @if (team.Squad.Count == 0) { <p class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No players have been purchased by this team yet.</p> }
+                                else { <ul class="divide-y divide-slate-100">@foreach (var player in team.Squad) { <li @key="player.Id" class="flex items-center justify-between gap-3 py-3"><div class="flex min-w-0 items-center gap-3">@if (!string.IsNullOrWhiteSpace(player.Photo)){<img src="@player.Photo" alt="@player.FullName" class="size-10 rounded-full object-cover"/>}else{<span class="flex size-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><i class="fa-solid fa-user" aria-hidden="true"></i></span>}<div class="min-w-0"><p class="truncate text-sm font-semibold text-slate-900">@player.FullName</p><p class="text-xs text-slate-500">@player.Role · @player.City</p></div></div><div class="shrink-0 text-right"><p class="text-sm font-semibold text-slate-800">@player.PurchasePrice.ToString("N0")</p><p class="text-xs text-slate-500">@player.PaymentMethod</p></div></li> } }</ul> }
+                            </div>
                 </article>
                 <div class="mt-4 flex items-center justify-between gap-3">
                     <button type="button" @onclick="PreviousTeam" disabled="@(currentTeamIndex == 0)" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
@@ -107,7 +114,7 @@
         <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div class="mb-6">
                 <p class="text-sm font-semibold uppercase tracking-wider text-emerald-700">Step 1</p>
-                <h2 class="mt-1 text-xl font-bold text-slate-900">Register a team</h2>
+                <h2 class="mt-1 text-xl font-bold text-slate-900">@(editingTeamId is null ? "Register a team" : "Edit team")</h2>
                 <p class="mt-1 text-sm text-slate-500">Add the team and its owner details to get started.</p>
             </div>
 
@@ -120,7 +127,7 @@
                 <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">@error</div>
             }
 
-            <EditForm Model="input" OnValidSubmit="AddTeam">
+            <EditForm Model="input" OnValidSubmit="SaveTeam">
                 <DataAnnotationsValidator />
                 <div class="space-y-4">
                     <label class="block">
@@ -182,8 +189,9 @@
                         </div>
                     </div>
                     <button type="submit" class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-2 focus:outline-offset-2 focus:outline-emerald-700">
-                        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add team
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i> @(editingTeamId is null ? "Add team" : "Save changes")
                     </button>
+                    @if (editingTeamId is not null) { <button type="button" @onclick="CancelEdit" class="w-full rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700">Cancel</button> }
                 </div>
             </EditForm>
         </section>
@@ -192,6 +200,7 @@
 
 @code {
     private NewTeamInput input = new();
+    private Guid? editingTeamId;
     private IReadOnlyList<TeamSummary> teams = [];
     private string? message;
     private string? error;
@@ -246,11 +255,26 @@
         input.LogoDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(buffer.ToArray())}";
     }
 
-    private async Task AddTeam()
+    private void EditTeam(TeamSummary team)
     {
-        error = await TeamService.CreateTeamAsync(input);
+        editingTeamId = team.Id; input = new NewTeamInput { Name = team.Name, City = team.City, LogoDataUrl = team.LogoImage, OwnerName = team.OwnerName, OwnerPhone = team.OwnerPhone, OwnerEmail = team.OwnerEmail };
+        message = null; error = null;
+    }
+
+    private void CancelEdit() { editingTeamId = null; input = new NewTeamInput(); logoError = null; }
+
+    private async Task DeleteTeam(TeamSummary team)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete {team.Name}? Teams with players in their squad cannot be deleted.")) return;
+        error = await TeamService.DeleteTeamAsync(team.Id); message = error is null ? $"{team.Name} deleted." : null;
+        teams = await TeamService.GetTeamsAsync(); currentTeamIndex = Math.Clamp(currentTeamIndex, 0, Math.Max(0, teams.Count - 1));
+    }
+
+    private async Task SaveTeam()
+    {
+        error = editingTeamId is Guid id ? await TeamService.UpdateTeamAsync(id, input) : await TeamService.CreateTeamAsync(input);
         var addedTeamName = input.Name.Trim();
-        message = error is null ? $"{addedTeamName} has been registered." : null;
+        message = error is null ? editingTeamId is null ? $"{addedTeamName} has been registered." : $"{addedTeamName} updated." : null;
 
         if (error is null)
         {
@@ -258,6 +282,7 @@
             teams = await TeamService.GetTeamsAsync();
             currentTeamIndex = Math.Max(0, Array.FindIndex(teams.ToArray(), team => team.Name == addedTeamName));
             logoError = null;
+            editingTeamId = null;
         }
     }
 }

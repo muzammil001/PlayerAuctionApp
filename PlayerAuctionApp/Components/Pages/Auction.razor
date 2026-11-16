@@ -1,0 +1,556 @@
+@page "/auction"
+@layout AuctionLayout
+@rendermode InteractiveServer
+@implements IDisposable
+@inject AuctionPlayerService PlayerService
+@inject AuctionTeamService TeamService
+@inject AuctionSaleService SaleService
+@inject AuctionBidService BidService
+@inject AuctionClockService ClockService
+@inject IJSRuntime JS
+
+<PageTitle>Auction Room</PageTitle>
+
+<main class="auction-screen min-h-screen bg-[#07110e] px-4 py-5 text-white sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-[1920px]">
+        <header class="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
+            <div class="flex items-center gap-3">
+                <span class="flex size-12 items-center justify-center rounded-2xl bg-emerald-500 text-xl text-slate-950"><i class="fa-solid fa-baseball-bat-ball" aria-hidden="true"></i></span>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-300">Live presentation</p>
+                    <h1 class="text-xl font-bold tracking-tight sm:text-2xl">Player Auction</h1>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div class="rounded-xl border border-white/10 bg-white/5 px-4 py-2">
+                    @if (auctionStartedAtUtc is { } startedAt)
+                    {
+                        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Started @startedAt.ToLocalTime().ToString("h:mm:ss tt")</p>
+                        <p class="font-mono text-lg font-bold text-emerald-300">@ElapsedTime</p>
+                    }
+                    else
+                    {
+                        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Auction clock</p>
+                        <button type="button" @onclick="StartAuction" class="text-sm font-bold text-emerald-300 hover:text-emerald-200">Start auction</button>
+                    }
+                </div>
+                <div class="rounded-xl border border-white/10 bg-white/5 px-4 py-2">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Available</p>
+                    <p class="text-lg font-bold">@AvailablePlayers.Count <span class="text-sm font-medium text-slate-400">/ 96</span></p>
+                </div>
+                <div class="rounded-xl border border-white/10 bg-white/5 px-4 py-2">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sold</p>
+                    <p class="text-lg font-bold text-emerald-300">@SoldCount</p>
+                </div>
+                <button type="button" @onclick="TogglePresentation" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-emerald-400">
+                    <i class="fa-solid fa-expand" aria-hidden="true"></i><span>Toggle presentation</span>
+                </button>
+            </div>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="mb-4 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-200" role="status">@statusMessage</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="mb-4 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-200" role="alert">@errorMessage</div>
+        }
+
+        @if (isLoading)
+        {
+            <div class="grid min-h-[65vh] place-items-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i> Loading auction room…</div>
+        }
+        else
+        {
+            <div class="grid items-start gap-5 xl:grid-cols-[minmax(270px,0.82fr)_minmax(480px,1.6fr)_minmax(290px,0.9fr)]">
+                <section class="overflow-hidden rounded-2xl border border-white/10 bg-[#101c17]">
+                    <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                        <div>
+                            <h2 class="font-bold">Player queue</h2>
+                            <p class="mt-0.5 text-xs text-slate-400">Select a player to put on stage</p>
+                        </div>
+                        <span class="rounded-lg bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">@AvailablePlayers.Count left</span>
+                    </div>
+                    <label class="relative block p-3">
+                        <i class="fa-solid fa-magnifying-glass absolute left-6 top-1/2 -translate-y-1/2 text-sm text-slate-500" aria-hidden="true"></i>
+                        <input value="@queueSearch" @oninput="QueueSearchChanged" aria-label="Search available players" placeholder="Search available players" class="w-full rounded-xl border border-white/10 bg-[#07110e] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-500/60" />
+                    </label>
+                    <div class="max-h-[64vh] min-h-64 space-y-1 overflow-y-auto px-3 pb-3">
+                        @foreach (var candidate in FilteredQueue)
+                        {
+                            <button type="button" @key="candidate.Id" @onclick="() => SelectPlayer(candidate.Id)" class="@QueueItemClass(candidate)">
+                                <span class="min-w-0">
+                                    <span class="block truncate font-semibold">@candidate.FullName</span>
+                                    <span class="mt-1 block text-xs text-slate-400">@RoleLabel(candidate.Role) <span class="px-1 text-slate-600">·</span> @candidate.City</span>
+                                </span>
+                                <span class="shrink-0 text-right">
+                                    <span class="block text-xs text-slate-400">Base</span>
+                                    <span class="block text-sm font-bold text-emerald-300">@candidate.BasePricePoints.ToString("N0")</span>
+                                </span>
+                            </button>
+                        }
+                        @if (FilteredQueue.Count == 0)
+                        {
+                            <p class="px-3 py-8 text-center text-sm text-slate-400">No available players match your search.</p>
+                        }
+                    </div>
+                </section>
+
+                <section class="min-w-0 space-y-5">
+                    @if (SelectedPlayer is { } player)
+                    {
+                        <article class="relative isolate overflow-hidden rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-[#12261c] via-[#102019] to-[#101720] p-6 shadow-2xl shadow-black/20 sm:p-9">
+                            <div class="pointer-events-none absolute -right-24 -top-28 -z-10 size-96 rounded-full bg-emerald-400/10 blur-3xl"></div>
+                            <div class="mb-8 flex items-center justify-between gap-4">
+                                <span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-200">
+                                    <span class="size-2 animate-pulse rounded-full bg-emerald-400"></span> On the auction block
+                                </span>
+                                <span class="text-sm font-medium text-slate-400">Player @PlayerNumber(player.Id) of @players.Count</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-7 text-center sm:flex-row sm:text-left">
+                                @if (!string.IsNullOrWhiteSpace(player.Photo))
+                                {
+                                    <img src="@player.Photo" alt="@player.FullName" class="size-36 shrink-0 rounded-3xl border border-white/15 object-cover shadow-xl sm:size-44" />
+                                }
+                                else
+                                {
+                                    <div class="flex size-36 shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-6xl text-emerald-300/70 shadow-xl sm:size-44">
+                                        <i class="fa-solid fa-user" aria-hidden="true"></i>
+                                    </div>
+                                }
+                                <div class="min-w-0 flex-1">
+                                    <p class="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">@(player.Role switch { PlayerRole.AllRounder => "All-rounder", PlayerRole.WicketKeeper => "Wicket-keeper", _ => player.Role.ToString() })</p>
+                                    <h2 class="break-words text-4xl font-black leading-tight tracking-tight sm:text-5xl 2xl:text-6xl">@player.FullName</h2>
+                                    <p class="mt-3 text-lg text-slate-300">@player.City <span class="px-1 text-slate-500">·</span> Age @player.Age <span class="px-1 text-slate-500">·</span> @player.BattingHand-handed batter</p>
+                                    @if (!string.IsNullOrWhiteSpace(player.BowlingStyle))
+                                    {
+                                        <p class="mt-1 text-sm text-slate-400">@player.BowlingStyle</p>
+                                    }
+                                    <div class="mt-7 grid max-w-xl gap-3 sm:grid-cols-2">
+                                        <div class="rounded-2xl border border-white/10 bg-black/20 px-5 py-3">
+                                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Base price</p>
+                                            <p class="mt-1 text-2xl font-black text-slate-200">@player.BasePricePoints.ToString("N0") <span class="text-sm font-semibold">pts</span></p>
+                                        </div>
+                                        <div class="rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.07] px-5 py-3">
+                                            <p class="text-xs font-semibold uppercase tracking-wider text-emerald-300">Current highest bid</p>
+                                            @if (HighestBid is { } playerHighestBid)
+                                            {
+                                                var playerHighestBidTeam = teams.FirstOrDefault(team => team.Id == playerHighestBid.TeamId);
+                                                <p class="mt-1 text-2xl font-black text-emerald-300">@playerHighestBid.Amount.ToString("N0") <span class="text-sm font-semibold">@(playerHighestBid.PaymentMethod == PurchasePaymentMethod.Cash ? "cash" : "pts")</span></p>
+                                                <div class="mt-3 flex min-w-0 items-center gap-3">
+                                                    @if (!string.IsNullOrWhiteSpace(playerHighestBidTeam?.LogoImage))
+                                                    {
+                                                        <img src="@playerHighestBidTeam.LogoImage" alt="@playerHighestBid.TeamName logo" class="size-12 shrink-0 rounded-xl border border-white/10 object-cover" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 text-lg text-emerald-300"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                                                    }
+                                                    <div class="min-w-0"><p class="truncate text-base font-black text-white">@playerHighestBid.TeamName</p><p class="mt-0.5 truncate text-sm font-medium text-slate-300">Owner: @playerHighestBid.OwnerName</p></div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <p class="mt-1 text-base font-bold text-slate-300">No bids yet</p>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+
+                        <section class="rounded-2xl border border-white/10 bg-[#101c17] p-5 sm:p-6">
+                            <div class="mb-4 flex items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Auctioneer controls</p>
+                                    <h3 class="mt-1 text-lg font-bold">Place a bid</h3>
+                                </div>
+                                <i class="fa-solid fa-gavel text-xl text-emerald-300" aria-hidden="true"></i>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-[1.3fr_1fr_1fr_auto]">
+                                <label class="block">
+                                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Bidding team</span>
+                                    <select @bind="selectedTeamId" class="w-full rounded-xl border border-white/10 bg-[#07110e] px-3 py-3 text-sm text-white outline-none focus:border-emerald-500/60">
+                                        <option value="">Select a team</option>
+                                        @foreach (var team in teams)
+                                        {
+                                            <option value="@team.Id">@team.Name · @team.OwnerName · @team.SquadCount/16</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label class="block">
+                                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Bid amount</span>
+                                    <div class="relative">
+                                        <input type="number" min="@MinimumBid" step="500" value="@winningPrice" @oninput="PriceChanged" class="w-full rounded-xl border border-white/10 bg-[#07110e] px-3 py-3 pr-12 text-sm font-semibold text-white outline-none focus:border-emerald-500/60" />
+                                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">pts</span>
+                                    </div>
+                                </label>
+                                <label class="block">
+                                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Payment</span>
+                                    <select @bind="paymentMethod" class="w-full rounded-xl border border-white/10 bg-[#07110e] px-3 py-3 text-sm text-white outline-none focus:border-emerald-500/60">
+                                        <option value="@PurchasePaymentMethod.Points">Points</option>
+                                        <option value="@PurchasePaymentMethod.Cash">Cash buy</option>
+                                    </select>
+                                </label>
+                                <button type="button" @onclick="PlaceBid" disabled="@(auctionStartedAtUtc is null || selectedTeamId is null || winningPrice < MinimumBid || teams.Count == 0)" class="inline-flex items-center justify-center gap-2 self-end rounded-xl bg-emerald-500 px-5 py-3 font-bold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40">
+                                    <i class="fa-solid fa-gavel" aria-hidden="true"></i> Place bid
+                                </button>
+                            </div>
+                            @if (HighestBid is { } highestBid)
+                            {
+                                <div class="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.07] p-4">
+                                    <div class="flex flex-wrap items-center justify-between gap-3">
+                                        <div><p class="text-xs font-bold uppercase tracking-wider text-emerald-300">Current highest bid</p><p class="mt-1 text-2xl font-black text-white">@highestBid.Amount.ToString("N0") <span class="text-sm text-slate-400">@(highestBid.PaymentMethod == PurchasePaymentMethod.Cash ? "cash" : "points")</span></p><p class="mt-1 text-sm text-slate-300">@highestBid.TeamName · owner @highestBid.OwnerName</p></div>
+                                        <button type="button" @onclick="AwardPlayer" disabled="@(auctionStartedAtUtc is null)" class="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 font-bold text-slate-950 transition hover:bg-emerald-100 disabled:opacity-40"><i class="fa-solid fa-trophy" aria-hidden="true"></i> Award to highest bidder</button>
+                                    </div>
+                                    @if (bids.Count > 1)
+                                    {
+                                        <details class="mt-4 border-t border-white/10 pt-3"><summary class="cursor-pointer text-sm font-semibold text-slate-300">Bid history (@bids.Count)</summary><ol class="mt-3 space-y-2">@foreach (var bid in bids){<li class="flex items-center justify-between gap-3 text-sm"><span class="text-slate-300">@bid.TeamName <span class="text-slate-500">· @bid.OwnerName</span></span><span class="font-bold text-white">@bid.Amount.ToString("N0")</span></li>}</ol></details>
+                                    }
+                                </div>
+                            }
+                            @if (SelectedTeam is { } cashStatusTeam)
+                            {
+                                <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                                    <CashPurchaseLights Remaining="cashStatusTeam.CashPurchasesRemaining" />
+                                </div>
+                            }
+                            <p class="mt-3 text-xs leading-5 text-slate-500">@(auctionStartedAtUtc is null ? "Start the auction clock before awarding players. " : "")Points purchases reduce the team budget. Each team can make up to 3 cash buys. Squad limit is 16 players.</p>
+                        </section>
+                    }
+                    else
+                    {
+                        <section class="grid min-h-[55vh] place-items-center rounded-3xl border border-white/10 bg-[#101c17] p-8 text-center">
+                            <div>
+                                @if (players.Count == 0)
+                                {
+                                    <i class="fa-solid fa-user-plus mb-4 text-5xl text-emerald-300" aria-hidden="true"></i>
+                                    <h2 class="text-3xl font-black">Add players to begin</h2>
+                                    <p class="mt-2 text-slate-400">Register players in the player pool before starting the auction.</p>
+                                }
+                                else
+                                {
+                                    <i class="fa-solid fa-trophy mb-4 text-5xl text-emerald-300" aria-hidden="true"></i>
+                                    <h2 class="text-3xl font-black">Auction pool complete</h2>
+                                    <p class="mt-2 text-slate-400">All registered players have been sold.</p>
+                                }
+                            </div>
+                        </section>
+                    }
+                </section>
+
+                <aside class="overflow-hidden rounded-2xl border border-white/10 bg-[#101c17]">
+                    <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                        <div>
+                            <h2 class="font-bold">Teams</h2>
+                            <p class="mt-0.5 text-xs text-slate-400">Squad and remaining budget</p>
+                        </div>
+                        <span class="rounded-lg bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">@teams.Count teams</span>
+                    </div>
+                    <div class="max-h-[68vh] space-y-2 overflow-y-auto p-3">
+                        @foreach (var team in teams)
+                        {
+                            <button type="button" @key="team.Id" @onclick="() => OpenTeam(team.Id)" class="block w-full rounded-xl border border-white/8 bg-white/[0.035] p-3.5 text-left transition hover:border-emerald-400/40 hover:bg-emerald-400/[0.06] focus:outline-none focus:ring-2 focus:ring-emerald-400/50">
+                                <div class="flex items-center gap-3">
+                                    @if (!string.IsNullOrWhiteSpace(team.LogoImage))
+                                    {
+                                        <img src="@team.LogoImage" alt="" class="size-10 rounded-lg bg-white/10 object-cover" />
+                                    }
+                                    else
+                                    {
+                                        <span class="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                                    }
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate font-semibold">@team.Name</p>
+                                        <p class="truncate text-xs text-slate-400">@team.OwnerName</p>
+                                    </div>
+                                    <span class="text-xs font-bold @(team.SquadCount >= 16 ? "text-amber-300" : "text-slate-300")">@team.SquadCount/16</span>
+                                </div>
+                                <div class="mt-3 flex items-end justify-between gap-2 border-t border-white/8 pt-2.5">
+                                    <div>
+                                        <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Points left</p>
+                                        <p class="font-bold text-emerald-300">@team.RemainingPoints.ToString("N0")</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <CashPurchaseLights Remaining="team.CashPurchasesRemaining" Compact="true" />
+                                        <p class="mt-1 text-[10px] text-slate-400">Cash amount: <span class="font-semibold text-emerald-300">@CashPurchaseAmount(team).ToString("N0")</span></p>
+                                    </div>
+                                </div>
+                                <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                                    <div class="h-full rounded-full bg-emerald-500" style="width: @($"{SquadPercent(team.SquadCount)}%")"></div>
+                                </div>
+                            </button>
+                        }
+                        @if (teams.Count == 0)
+                        {
+                            <p class="px-3 py-8 text-center text-sm text-slate-400">Register teams before starting the auction.</p>
+                        }
+                    </div>
+                </aside>
+            </div>
+        }
+    </div>
+    @if (showAwardDialog)
+    {
+        <div class="award-success-backdrop" role="presentation" @onclick="CloseAwardDialog">
+            <section class="award-success-dialog" role="dialog" aria-modal="true" aria-labelledby="award-success-title" @onclick:stopPropagation="true">
+                <span class="award-success-icon"><i class="fa-solid fa-check" aria-hidden="true"></i></span>
+                <p class="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Purchase complete</p>
+                <h2 id="award-success-title" class="mt-2 text-2xl font-black sm:text-3xl">Player sold!</h2>
+                <p class="mt-3 text-slate-300"><strong class="text-white">@awardedPlayerName</strong> has been purchased by <strong class="text-white">@awardedTeamName</strong>.</p>
+                <p class="mt-2 text-lg font-bold text-emerald-300">@awardedPrice.ToString("N0") @(awardedPaymentMethod == PurchasePaymentMethod.Cash ? "cash" : "points")</p>
+                <button type="button" @onclick="CloseAwardDialog" class="mt-7 w-full rounded-xl bg-emerald-500 px-6 py-3.5 font-bold text-slate-950 transition hover:bg-emerald-400">Continue auction</button>
+            </section>
+        </div>
+    }
+
+    @if (viewedTeam is { } rosterTeam)
+    {
+        <div class="auction-team-backdrop fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/75 p-3 text-white backdrop-blur-sm sm:p-6" role="presentation" @onclick="CloseTeam">
+          <section class="auction-team-page my-auto grid max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-white/10 bg-[#0c1712] shadow-2xl md:grid-cols-[1.2fr_0.8fr]" role="dialog" aria-modal="true" aria-labelledby="roster-title" @onclick:stopPropagation="true">
+            <div class="min-h-0 overflow-y-auto border-b border-white/10 p-4 sm:p-6 md:border-b-0 md:border-r">
+              <div class="mb-5 flex items-center justify-between gap-3">
+                <div><p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Team squad</p><h2 class="mt-1 text-xl font-black sm:text-2xl">Players <span class="text-emerald-300">@rosterTeam.SquadCount/16</span></h2></div>
+                <button type="button" @onclick="CloseTeam" aria-label="Close team details" class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-slate-300 transition hover:bg-white/10"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+              </div>
+              <div class="space-y-2">
+                    @if (rosterTeam.Squad.Count == 0)
+                    {
+                        <div class="grid min-h-44 place-items-center rounded-2xl border border-dashed border-white/10 text-center text-slate-400"><div><i class="fa-solid fa-users mb-3 text-3xl text-emerald-300" aria-hidden="true"></i><p>No players purchased yet.</p></div></div>
+                    }
+                    @foreach (var member in rosterTeam.Squad)
+                    {
+                        <article @key="member.Id" class="auction-team-player flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.035] p-3 sm:gap-4 sm:p-4">
+                            @if (!string.IsNullOrWhiteSpace(member.Photo))
+                            {
+                                <img src="@member.Photo" alt="" class="size-12 rounded-xl object-cover sm:size-14" />
+                            }
+                            else
+                            {
+                                <span class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 text-xl text-emerald-300 sm:size-14"><i class="fa-solid fa-user" aria-hidden="true"></i></span>
+                            }
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate font-bold">@member.FullName</p>
+                                <p class="mt-1 truncate text-xs text-slate-400">@member.Role · @member.City</p>
+                            </div>
+                            <div class="shrink-0 text-right">
+                                <p class="font-bold text-emerald-300">@member.PurchasePrice.ToString("N0") <span class="text-xs">@(member.PaymentMethod == "Cash" ? "cash" : "pts")</span></p>
+                                <p class="mt-1 text-[11px] text-slate-500">@member.PurchasedAtUtc.ToLocalTime().ToString("dd MMM, h:mm:ss tt")</p>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </div>
+            <aside class="min-h-0 overflow-y-auto bg-white/[0.025] p-5 sm:p-7">
+              <div class="mb-6 flex items-center gap-4">
+                @if (!string.IsNullOrWhiteSpace(rosterTeam.LogoImage)) { <img src="@rosterTeam.LogoImage" alt="@rosterTeam.Name logo" class="size-16 rounded-2xl object-cover" /> }
+                else { <span class="flex size-16 items-center justify-center rounded-2xl bg-emerald-400/10 text-2xl text-emerald-300"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span> }
+                <div class="min-w-0"><p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Team info</p><h2 id="roster-title" class="mt-1 break-words text-2xl font-black">@rosterTeam.Name</h2></div>
+              </div>
+              <dl class="space-y-4">
+                <div class="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">City</dt><dd class="mt-1 font-semibold">@rosterTeam.City</dd></div>
+                <div class="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">Owner</dt><dd class="mt-1 font-semibold">@rosterTeam.OwnerName</dd><dd class="mt-1 text-sm text-slate-400">@rosterTeam.OwnerPhone</dd>@if (!string.IsNullOrWhiteSpace(rosterTeam.OwnerEmail)){<dd class="mt-1 break-all text-sm text-slate-400">@rosterTeam.OwnerEmail</dd>}</div>
+                <div class="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">Points remaining</dt><dd class="mt-1 text-2xl font-black text-emerald-300">@rosterTeam.RemainingPoints.ToString("N0")</dd></div>
+                <div class="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><CashPurchaseLights Remaining="rosterTeam.CashPurchasesRemaining" /></div>
+              </dl>
+              <button type="button" @onclick="CloseTeam" class="auction-team-back w-full rounded-xl bg-emerald-500 font-bold text-slate-950 transition hover:bg-emerald-400">Back to auction</button>
+            </aside>
+          </section>
+        </div>
+    }
+</main>
+
+@code {
+    private IReadOnlyList<PlayerSummary> players = [];
+    private IReadOnlyList<TeamSummary> teams = [];
+    private IReadOnlyList<AuctionBidSummary> bids = [];
+    private Guid? selectedPlayerId;
+    private Guid? selectedTeamId;
+    private PurchasePaymentMethod paymentMethod = PurchasePaymentMethod.Points;
+    private int winningPrice;
+    private string? queueSearch;
+    private string? statusMessage;
+    private string? errorMessage;
+    private bool isLoading = true;
+    private bool showAwardDialog;
+    private string awardedPlayerName = string.Empty;
+    private string awardedTeamName = string.Empty;
+    private int awardedPrice;
+    private PurchasePaymentMethod awardedPaymentMethod;
+    private Guid? viewedTeamId;
+    private DateTime? auctionStartedAtUtc;
+    private DateTime nowUtc = DateTime.UtcNow;
+    private Timer? clockTimer;
+    private TeamSummary? viewedTeam => viewedTeamId is { } id ? teams.FirstOrDefault(team => team.Id == id) : null;
+    private string ElapsedTime
+    {
+        get
+        {
+            var elapsed = auctionStartedAtUtc is { } started ? nowUtc - started : TimeSpan.Zero;
+            return $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+        }
+    }
+
+    private IReadOnlyList<PlayerSummary> AvailablePlayers => players.Where(player => player.TeamName is null).ToArray();
+    private IReadOnlyList<PlayerSummary> FilteredQueue => string.IsNullOrWhiteSpace(queueSearch)
+        ? AvailablePlayers
+        : AvailablePlayers.Where(player =>
+            player.FullName.Contains(queueSearch, StringComparison.OrdinalIgnoreCase)
+            || player.City.Contains(queueSearch, StringComparison.OrdinalIgnoreCase)).ToArray();
+    private PlayerSummary? SelectedPlayer => players.FirstOrDefault(player => player.Id == selectedPlayerId && player.TeamName is null);
+    private TeamSummary? SelectedTeam => teams.FirstOrDefault(team => team.Id == selectedTeamId);
+    private AuctionBidSummary? HighestBid => bids.FirstOrDefault();
+    private int MinimumBid => HighestBid is { } highest ? highest.Amount + 500 : SelectedPlayer?.BasePricePoints ?? 0;
+    private int SoldCount => players.Count - AvailablePlayers.Count;
+
+    private int PlayerNumber(Guid id) => players.ToList().FindIndex(player => player.Id == id) + 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        auctionStartedAtUtc = await ClockService.GetStartedAtUtcAsync();
+        await RefreshBoard();
+        if (auctionStartedAtUtc is not null)
+        {
+            StartClockTimer();
+        }
+        isLoading = false;
+    }
+
+    private async Task RefreshBoard()
+    {
+        players = await PlayerService.GetPlayersAsync();
+        teams = await TeamService.GetTeamsAsync();
+        if (SelectedPlayer is null)
+        {
+            SelectFirstAvailablePlayer();
+        }
+        bids = selectedPlayerId is { } playerId ? await BidService.GetBidsAsync(playerId) : [];
+        if (SelectedPlayer is { } currentPlayer)
+        {
+            winningPrice = HighestBid is { } highest ? highest.Amount + 500 : currentPlayer.BasePricePoints;
+        }
+    }
+
+    private void SelectFirstAvailablePlayer()
+    {
+        var player = AvailablePlayers.FirstOrDefault();
+        selectedPlayerId = player?.Id;
+        winningPrice = player?.BasePricePoints ?? 0;
+    }
+
+    private async Task SelectPlayer(Guid playerId)
+    {
+        var player = AvailablePlayers.FirstOrDefault(item => item.Id == playerId);
+        if (player is null)
+        {
+            return;
+        }
+
+        selectedPlayerId = player.Id;
+        bids = await BidService.GetBidsAsync(player.Id);
+        winningPrice = MinimumBid;
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void QueueSearchChanged(ChangeEventArgs args) => queueSearch = args.Value?.ToString();
+
+    private void PriceChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var price))
+        {
+            winningPrice = price;
+        }
+    }
+
+    private async Task PlaceBid()
+    {
+        if (auctionStartedAtUtc is null) { errorMessage = "Start the auction before accepting bids."; return; }
+        if (SelectedPlayer is not { } player || selectedTeamId is not { } teamId) { errorMessage = "Select a player and bidding team."; return; }
+        errorMessage = await BidService.PlaceBidAsync(player.Id, teamId, winningPrice, paymentMethod);
+        if (errorMessage is not null) { statusMessage = null; return; }
+        bids = await BidService.GetBidsAsync(player.Id);
+        winningPrice = MinimumBid;
+        errorMessage = null;
+        var highest = HighestBid!;
+        statusMessage = $"New highest bid: {highest.Amount:N0} by {highest.TeamName} ({highest.OwnerName}).";
+    }
+
+    private async Task AwardPlayer()
+    {
+        if (auctionStartedAtUtc is null)
+        {
+            errorMessage = "Start the auction before awarding players.";
+            return;
+        }
+
+        if (SelectedPlayer is not { } player || HighestBid is not { } highestBid)
+        {
+            errorMessage = "Place a bid before awarding this player.";
+            return;
+        }
+
+        errorMessage = await SaleService.SellPlayerAsync(player.Id, highestBid.TeamId, highestBid.Amount, highestBid.PaymentMethod);
+        if (errorMessage is not null)
+        {
+            statusMessage = null;
+            return;
+        }
+
+        var teamName = highestBid.TeamName;
+        awardedPlayerName = player.FullName;
+        awardedTeamName = teamName;
+        awardedPrice = highestBid.Amount;
+        awardedPaymentMethod = highestBid.PaymentMethod;
+        showAwardDialog = true;
+        statusMessage = null;
+        errorMessage = null;
+        selectedTeamId = null;
+        await RefreshBoard();
+    }
+
+    private void CloseAwardDialog() => showAwardDialog = false;
+
+    private string QueueItemClass(PlayerSummary player) => selectedPlayerId == player.Id
+        ? "flex w-full items-center justify-between gap-3 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-3 text-left text-white"
+        : "flex w-full items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-3 text-left text-slate-200 transition hover:border-white/10 hover:bg-white/5";
+
+    private static int SquadPercent(int count) => Math.Clamp(count * 100 / 16, 0, 100);
+
+    private static int CashPurchaseAmount(TeamSummary team) => team.Squad
+        .Where(player => player.PaymentMethod == PurchasePaymentMethod.Cash.ToString())
+        .Sum(player => player.PurchasePrice);
+
+    private async Task StartAuction()
+    {
+        auctionStartedAtUtc = await ClockService.StartAuctionAsync();
+        nowUtc = DateTime.UtcNow;
+        StartClockTimer();
+    }
+
+    private void StartClockTimer()
+    {
+        clockTimer?.Dispose();
+        clockTimer = new Timer(_ => _ = InvokeAsync(() =>
+        {
+            nowUtc = DateTime.UtcNow;
+            StateHasChanged();
+        }), null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+    }
+
+    private void OpenTeam(Guid teamId) => viewedTeamId = teamId;
+
+    private void CloseTeam() => viewedTeamId = null;
+
+    public void Dispose() => clockTimer?.Dispose();
+
+    private static string RoleLabel(PlayerRole role) => role switch
+    {
+        PlayerRole.AllRounder => "All-rounder",
+        PlayerRole.WicketKeeper => "Wicket-keeper",
+        _ => role.ToString(),
+    };
+
+    private async Task TogglePresentation() => await JS.InvokeVoidAsync("auctionScreen.toggle");
+}
